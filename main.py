@@ -13,6 +13,7 @@ from scipy import signal
 
 
 
+
 class MainWindow(QtWidgets.QMainWindow):
     spectrogramImgageList = [None, None, None]
 
@@ -29,18 +30,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.fmax = 0
         self.freq_arr = []
-        self.y_sampled = []
+        self.y_sampled = [] 
         self.y=[]
         self.x_axis_limit = 900
         self.step = 0
         self.time = np.arange(0,self.x_axis_limit)
         self.time_sampled = np.arange(0,self.x_axis_limit)
-
+        self.max_num_of_samples = 0
         self.signalsname = ""
         self.ampmax = 0
         self.amplist = []
         self.signals_components = []
-        
+        self.tmin = -3
+        self.tmax = 3
+        self.composer_time_axis = linspace(self.tmin, self.tmax, self.x_axis_limit)
 
         
 
@@ -56,52 +59,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    def open(self):
-        global data
-        path = QFileDialog.getOpenFileName(self, 'Open a file', '', 'All Files (*.*)')
-        if path != ('', ''):
-            data = path[0]
-            print("File path: " + data)
-        #       #       #
-        data1 = pp.read_csv(data)
-        print("================")
-        print(data1)
-        t = data1['# t']
-        x = data1['x']
-        self.y = x
-        self.time = np.arange(0,len(self.y))
-        self.set_slider_limits()
-        self.set_graph_limits()
-        self.update_plots()
-
-    def set_slider_limits(self):
-        # to set constrain to the slider //from 0 to 3fmax
-        if len(self.y) == 0:
-            return
-        signal_fft = np.fft.rfft(self.y)
-        peak = np.argmax(signal_fft)
-        self.fmax = np.abs(peak)
-        
-        #self.fmax = min(self.fmax,50)
-        #if self.fmax > 50 :#and len(self.freq_arr) !=0:
-        #    self.fmax = self.fmax/6 #max(self.freq_arr)
-        
-        self.ui.Points_sampled_horizontalSlider.setMinimum(1)
-        self.ui.Points_sampled_horizontalSlider.setMaximum(0.5 * self.fmax)#0.5
-
     def update_plots(self): 
         if len(self.y) == 0:
             return
 
         self.ui.Samplingpoints_widget.clear()
         self.ui.Samplingpoints_widget.plot(self.time, self.y, pen='b')
-
-        
-
-        self.num_of_samples = self.ui.Points_sampled_horizontalSlider.value() *6
-        self.ui.Sampled_points_number_lcdNumber.display(self.num_of_samples/6)
-
-        
+        self.num_of_samples = self.ui.Points_sampled_horizontalSlider.value() *6 +1
+        self.ui.num_of_samples_lcd.display(round(self.num_of_samples))
+        print(self.num_of_samples/ (   6* (2/3 * self.max_num_of_samples)   )   )
+        print("num of samples : " + str(self.num_of_samples))
+        print("self.max num of sampples : " + str(self.max_num_of_samples))
+        self.ui.percentage_of_fmax_lcd.display("{:.1f}".format(self.num_of_samples/ (   3* (2/3 * self.max_num_of_samples)  ) ))
         self.y_sampled = [] ## ## ##
 
 
@@ -115,6 +84,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.y_sampled = np.append(self.y_sampled, self.y[i])
 
 
+
         #plotting the original signal with its sampled points  
         self.ui.Samplingpoints_widget.plot(self.time_sampled, self.y_sampled, symbol='o', pen=None)
         
@@ -124,50 +94,37 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.Sampledsignal_widget.plot( np.arange(0,len(self.y)), self.reconstructed_signal, pen='r')
 
     def composerchanging(self):
-        global time
-        global tmin
         self.ui.Signal_compose_widget.clear()
         index = self.ui.comboBox_Signals.currentIndex()
         signal_part = self.signals_components[index]
-        self.ui.Signal_compose_widget.plot(time, signal_part, pen='r')
-        self.ui.Signal_compose_widget.setLimits(xMin=tmin - 0.2, xMax=tmax + 0.2, yMin=-self.amplist[index] - 0.2,
+        self.ui.Signal_compose_widget.plot(self.composer_time_axis, signal_part, pen='r')
+        self.ui.Signal_compose_widget.setLimits(xMin=self.tmin - 0.2, xMax=self.tmax + 0.2, yMin=-self.amplist[index] - 0.2,
                                                 yMax=self.amplist[index] + 0.2)
 
     def composer(self):
-        global time
-        global tmin
-        global tmax
-
         self.ui.Signal_compose_widget.clear()
-        tmin = -3
-        tmax = 3
-        time = linspace(tmin, tmax, self.x_axis_limit)
         freq = self.ui.SpinBox_Frequency.value()
-
         self.freq_arr.append(freq) # for sampling
 
         self.amp = self.ui.SpinBox_Magnitude.value()
-        self.ui.Signal_compose_widget.setLimits(xMin=tmin - 0.2, xMax=tmax + 0.2, yMin=-self.amp - 0.2, yMax=self.amp + 0.2)
+        self.ui.Signal_compose_widget.setLimits(xMin=self.tmin - 0.2, xMax=self.tmax + 0.2, yMin=-self.amp - 0.2, yMax=self.amp + 0.2)
         phase = self.ui.SpinBox_Phase.value()
-        signal_part = self.amp * sin(2 * pi * freq * time + phase)
+        signal_part = self.amp * sin(2 * pi * freq * self.composer_time_axis + phase)
         self.signals_components.append(signal_part)
         self.amplist.append(self.amp)
         self.signalsname = self.ui.Signal_name_lineEdit.text()
         self.ui.comboBox_Signals.addItem(self.signalsname)
-        self.ui.Signal_compose_widget.plot(time, signal_part, pen='y')
+        self.ui.Signal_compose_widget.plot(self.composer_time_axis, signal_part, pen='y')
         self.ampmax += self.amp
         self.ui.comboBox_Signals.setCurrentIndex(len(self.amplist) - 1)
-        SavedSignal = np.asarray([np.round(time, 3), np.round(sum(self.signals_components), 3)])
+        SavedSignal = np.asarray([np.round(self.composer_time_axis, 3), np.round(sum(self.signals_components), 3)])
         np.savetxt(str(self.signalsname) + '.csv', SavedSignal.T, fmt='%1.5f', delimiter=",", header="t,x")
 
     def composerSum(self):
-        global time
-        global tmin
-        global tmax
         
-        self.ui.Signal_Summ_widget.setLimits(xMin=tmin - 0.2, xMax=tmax + 0.2, yMin=-self.ampmax - 0.2, yMax=self.ampmax + 0.2)
+        self.ui.Signal_Summ_widget.setLimits(xMin=self.tmin - 0.2, xMax=self.tmax + 0.2, yMin=-self.ampmax - 0.2, yMax=self.ampmax + 0.2)
         self.ui.Signal_Summ_widget.clear()
-        self.ui.Signal_Summ_widget.plot(time, sum(self.signals_components), pen='g')
+        self.ui.Signal_Summ_widget.plot(self.composer_time_axis, sum(self.signals_components), pen='g')
 
     def delete_signal(self):
         self.ui.comboBox_Signals.removeItem(self.ui.comboBox_Signals.currentIndex())
@@ -181,8 +138,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_slider_limits()
         self.set_graph_limits()
         self.update_plots()
-        
+        self.ui.tabWidget.setCurrentIndex(0)
 
+        
     def set_graph_limits(self):
         if len(self.y) == 0:
             return
@@ -202,7 +160,35 @@ class MainWindow(QtWidgets.QMainWindow):
                                             self.time_sampled[:, np.newaxis], (1, len(self.time)))
         self.reconstructed_signal = np.dot(self.y_sampled, np.sinc(self.sinc_magnitude / self.step))
         
-    
+
+    def open(self):
+        global data
+        path = QFileDialog.getOpenFileName(self, 'Open a file', '', 'All Files (*.*)')
+        if path != ('', ''):
+            data = path[0]
+        data1 = pp.read_csv(data)
+        t = data1['# t']
+        x = data1['x']
+        self.y = x
+        self.time = np.arange(0,len(self.y))
+        self.set_slider_limits()
+        self.set_graph_limits()
+        self.update_plots()
+
+    def set_slider_limits(self):
+        # to set constrain to the slider //from 0 to 3fmax
+        if len(self.y) == 0:
+            return
+
+        signal_fft = np.fft.rfft(self.y)
+        peak = np.argmax(signal_fft)
+        self.fmax = np.abs(peak)
+        
+        self.max_num_of_samples =0.5 * self.fmax
+
+        self.ui.Points_sampled_horizontalSlider.setMinimum(1)
+        self.ui.Points_sampled_horizontalSlider.setMaximum(self.max_num_of_samples)#0.5
+
         
 def main():
     app = QtWidgets.QApplication(sys.argv)
